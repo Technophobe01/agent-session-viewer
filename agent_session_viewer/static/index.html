@@ -191,9 +191,13 @@
             gap: 6px;
         }
 
-        .session-meta .project-name {
-            color: var(--agent-accent);
+        .session-meta .agent-indicator {
+            color: #d4a574;
             font-weight: 500;
+        }
+
+        .session-meta .project-name {
+            color: var(--text);
         }
 
         .session-meta .meta-sep {
@@ -698,6 +702,8 @@
                     data-id="${s.id}">
                     <div class="session-title">${escapeHtml(s.first_message || 'No message')}</div>
                     <div class="session-meta">
+                        <span class="agent-indicator">⬡ Claude</span>
+                        <span class="meta-sep">·</span>
                         <span class="project-name">${s.project}</span>
                         <span class="meta-sep">·</span>
                         <span>${s.message_count} msgs</span>
