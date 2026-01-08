@@ -291,16 +291,24 @@ async def event_stream(session_id: Optional[str] = None):
                         project_name = sync_module.get_project_name(source_path.parent)
                         result = await asyncio.to_thread(
                             sync_module.sync_session_file,
-                            source_path, project_name, "local", True
+                            source_path, project_name, machine="local", force=True
                         )
                         if result and not result.get("skipped"):
                             yield f"event: session_updated\ndata: {session_id}\n\n"
                     elif last_mtime is None:
                         last_mtime = current_mtime
                 except (FileNotFoundError, PermissionError):
-                    # File was deleted or became inaccessible, stop watching
+                    # File was deleted or became inaccessible, reset and try to re-resolve
                     source_path = None
                     last_mtime = None
+            elif session_id:
+                # Try to re-resolve source file (handles transient errors or file recreation)
+                source_path = sync_module.find_source_file(session_id)
+                if source_path:
+                    try:
+                        last_mtime = source_path.stat().st_mtime
+                    except (FileNotFoundError, PermissionError):
+                        source_path = None
 
             # Send heartbeat every 20 iterations (~30 seconds)
             if heartbeat_counter >= 20:
