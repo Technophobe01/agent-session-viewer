@@ -16,6 +16,7 @@ class SessionMetadata:
     started_at: Optional[str]
     ended_at: Optional[str]
     message_count: int
+    agent: str = "claude"  # "claude" or "codex"
 
 
 @dataclass
@@ -235,3 +236,122 @@ def iter_project_sessions(sessions_dir: Path) -> Generator[tuple[str, Path], Non
 
         for session_file in project_dir.glob("*.jsonl"):
             yield project_name, session_file
+
+
+def extract_codex_project(cwd: str) -> str:
+    """Extract project name from Codex cwd path."""
+    if not cwd:
+        return "unknown"
+    path = Path(cwd)
+    # Use the last component of the path as project name
+    return path.name or "unknown"
+
+
+def parse_codex_session(
+    jsonl_path: Path,
+    machine: str = "local"
+) -> tuple[SessionMetadata, list[ParsedMessage]]:
+    """
+    Parse a Codex JSONL session file and extract metadata + messages.
+
+    Codex format:
+    - session_meta: {payload: {id, cwd, timestamp}}
+    - response_item: {payload: {role: "user"|"assistant", content: [{type, text}]}}
+
+    Returns:
+        Tuple of (SessionMetadata, list of ParsedMessages)
+    """
+    messages = []
+    first_message = None
+    started_at = None
+    ended_at = None
+    session_id = None
+    project = "unknown"
+
+    try:
+        with open(jsonl_path, "r", encoding="utf-8") as f:
+            for line in f:
+                if not line.strip():
+                    continue
+
+                try:
+                    entry = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+
+                entry_type = entry.get("type")
+                payload = entry.get("payload", {})
+                ts_str = entry.get("timestamp")
+                ts = parse_timestamp(ts_str)
+
+                if ts:
+                    if started_at is None:
+                        started_at = ts
+                    ended_at = ts
+
+                # Extract session metadata
+                if entry_type == "session_meta":
+                    session_id = payload.get("id")
+                    cwd = payload.get("cwd", "")
+                    project = extract_codex_project(cwd)
+
+                # Process messages
+                elif entry_type == "response_item":
+                    role = payload.get("role")
+                    if role not in ("user", "assistant"):
+                        continue
+
+                    content_blocks = payload.get("content", [])
+                    texts = []
+                    for block in content_blocks:
+                        if isinstance(block, dict):
+                            block_type = block.get("type", "")
+                            if block_type in ("input_text", "output_text", "text"):
+                                text = block.get("text", "")
+                                if text:
+                                    texts.append(text)
+
+                    content = "\n".join(texts)
+                    if not content.strip():
+                        continue
+
+                    # Skip system/instruction messages
+                    if role == "user" and (
+                        content.startswith("# AGENTS.md") or
+                        content.startswith("<environment_context>") or
+                        content.startswith("<INSTRUCTIONS>")
+                    ):
+                        continue
+
+                    # Capture first user message for summary
+                    if role == "user" and first_message is None:
+                        first_message = content[:300].replace("\n", " ").strip()
+                        if len(content) > 300:
+                            first_message += "..."
+
+                    messages.append(ParsedMessage(
+                        msg_id=make_msg_id(ts_str) if ts_str else f"msg-{len(messages)}",
+                        role=role,
+                        content=content,
+                        timestamp=ts_str or "",
+                    ))
+
+    except Exception as e:
+        print(f"Error parsing Codex session {jsonl_path}: {e}")
+
+    # Fallback session_id from filename if not in metadata
+    if not session_id:
+        session_id = jsonl_path.stem
+
+    metadata = SessionMetadata(
+        session_id=session_id,
+        project=project,
+        machine=machine,
+        first_message=first_message,
+        started_at=started_at.isoformat() if started_at else None,
+        ended_at=ended_at.isoformat() if ended_at else None,
+        message_count=len(messages),
+        agent="codex",
+    )
+
+    return metadata, messages

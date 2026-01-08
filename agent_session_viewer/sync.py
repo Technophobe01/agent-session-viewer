@@ -9,7 +9,7 @@ from typing import Optional
 import fnmatch
 
 from . import db
-from .parser import parse_session, iter_project_sessions
+from .parser import parse_session, parse_codex_session, iter_project_sessions
 
 
 def compute_file_hash(path: Path) -> str:
@@ -24,6 +24,12 @@ def compute_file_hash(path: Path) -> str:
 CLAUDE_PROJECTS_DIR = Path(os.environ.get(
     "CLAUDE_PROJECTS_DIR",
     Path.home() / ".claude" / "projects"
+))
+
+# Where Codex stores sessions
+CODEX_SESSIONS_DIR = Path(os.environ.get(
+    "CODEX_SESSIONS_DIR",
+    Path.home() / ".codex" / "sessions"
 ))
 
 # Where we store session files (in user's home directory)
@@ -156,6 +162,7 @@ def sync_session_file(
         message_count=metadata.message_count,
         file_size=source_size,
         file_hash=source_hash,
+        agent=metadata.agent,
     )
 
     # Re-index messages
@@ -220,17 +227,115 @@ def sync_project(project_dir: Path, machine: str = "local", on_progress=None) ->
     return stats
 
 
+def find_codex_sessions() -> list[Path]:
+    """Find all Codex session files (in year/month/day subdirectories)."""
+    if not CODEX_SESSIONS_DIR.exists():
+        return []
+
+    sessions = []
+    # Codex stores in ~/.codex/sessions/{year}/{month}/{day}/*.jsonl
+    for year_dir in CODEX_SESSIONS_DIR.iterdir():
+        if not year_dir.is_dir() or not year_dir.name.isdigit():
+            continue
+        for month_dir in year_dir.iterdir():
+            if not month_dir.is_dir() or not month_dir.name.isdigit():
+                continue
+            for day_dir in month_dir.iterdir():
+                if not day_dir.is_dir() or not day_dir.name.isdigit():
+                    continue
+                for session_file in day_dir.glob("*.jsonl"):
+                    sessions.append(session_file)
+
+    return sorted(sessions)
+
+
+def sync_codex_session(
+    source_path: Path,
+    machine: str = "local",
+    force: bool = False,
+) -> Optional[dict]:
+    """
+    Sync a single Codex session file.
+
+    Returns:
+        Session metadata dict if synced, None if skipped
+    """
+    # Get source file info
+    source_size = source_path.stat().st_size
+
+    # Parse to get session_id and project from content
+    metadata, messages = parse_codex_session(source_path, machine)
+    session_id = metadata.session_id
+
+    # Check if file has changed using size + hash
+    stored_info = db.get_session_file_info(session_id)
+    if stored_info and not force:
+        stored_size, stored_hash = stored_info
+        if stored_size == source_size:
+            source_hash = compute_file_hash(source_path)
+            if source_hash == stored_hash:
+                return {
+                    "session_id": session_id,
+                    "project": metadata.project,
+                    "skipped": True,
+                    "messages": 0,
+                }
+
+    source_hash = compute_file_hash(source_path)
+
+    # Copy to local storage under codex/ prefix
+    target_dir = SESSIONS_DIR / f"codex_{metadata.project}"
+    target_dir.mkdir(parents=True, exist_ok=True)
+    target_path = target_dir / f"{session_id}.jsonl"
+    shutil.copy2(source_path, target_path)
+
+    # Update database
+    db.upsert_session(
+        session_id=metadata.session_id,
+        project=metadata.project,
+        machine=metadata.machine,
+        first_message=metadata.first_message,
+        started_at=metadata.started_at,
+        ended_at=metadata.ended_at,
+        message_count=metadata.message_count,
+        file_size=source_size,
+        file_hash=source_hash,
+        agent=metadata.agent,
+    )
+
+    # Re-index messages
+    db.delete_session_messages(session_id)
+    if messages:
+        batch = [
+            (session_id, m.msg_id, m.role, m.content, m.timestamp)
+            for m in messages
+        ]
+        db.insert_messages_batch(batch)
+
+    return {
+        "session_id": session_id,
+        "project": metadata.project,
+        "skipped": False,
+        "messages": len(messages),
+    }
+
+
 def sync_all(machine: str = "local", on_progress=None) -> dict:
     """
-    Sync all matching projects.
+    Sync all matching projects from Claude and Codex.
 
     Returns:
         Dict with overall sync stats
     """
+    # Claude projects
     projects = find_matching_projects()
+    # Codex sessions
+    codex_sessions = find_codex_sessions()
+
+    total_items = len(projects) + (1 if codex_sessions else 0)
 
     if on_progress:
-        on_progress("start", projects=len(projects))
+        on_progress("start", projects=total_items)
 
     results = {
         "timestamp": datetime.now().isoformat(),
@@ -239,11 +344,49 @@ def sync_all(machine: str = "local", on_progress=None) -> dict:
         "total_synced": 0,
     }
 
+    # Sync Claude projects
     for project_dir in projects:
         stats = sync_project(project_dir, machine, on_progress=on_progress)
         results["projects"].append(stats)
         results["total_sessions"] += stats["total"]
         results["total_synced"] += stats["synced"]
+
+    # Sync Codex sessions
+    if codex_sessions:
+        if on_progress:
+            on_progress("project_start", project="codex", sessions=len(codex_sessions))
+
+        codex_stats = {
+            "project": "codex",
+            "total": 0,
+            "synced": 0,
+            "skipped": 0,
+        }
+
+        for session_file in codex_sessions:
+            if on_progress:
+                on_progress("session_start", session=session_file.stem)
+
+            result = sync_codex_session(session_file, machine)
+            codex_stats["total"] += 1
+
+            msg_count = 0
+            if result:
+                msg_count = result.get("messages", 0)
+                if result.get("skipped"):
+                    codex_stats["skipped"] += 1
+                else:
+                    codex_stats["synced"] += 1
+
+            if on_progress:
+                on_progress("session_done", messages=msg_count)
+
+        if on_progress:
+            on_progress("project_done", project="codex")
+
+        results["projects"].append(codex_stats)
+        results["total_sessions"] += codex_stats["total"]
+        results["total_synced"] += codex_stats["synced"]
 
     if on_progress:
         on_progress("done")

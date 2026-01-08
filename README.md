@@ -1,10 +1,10 @@
 # Agent Session Viewer
 
-Browse, search, and revisit your AI coding sessions. Never lose track of that clever solution Claude came up with three weeks ago.
+Browse, search, and revisit your AI coding sessions. Never lose track of that clever solution your AI pair programmer came up with three weeks ago.
 
 ## Why?
 
-Claude Code sessions pile up fast. Finding that one conversation where you solved a tricky bug or implemented a specific pattern means digging through `~/.claude/projects/` by hand. This tool gives you instant full-text search across every session, organized by project.
+AI coding sessions pile up fast. Finding that one conversation where you solved a tricky bug or implemented a specific pattern means digging through session files by hand. This tool gives you instant full-text search across every session from Claude Code and Codex, organized by project.
 
 ## Features
 
@@ -54,9 +54,14 @@ Options:
 | `⌘K` | Focus search |
 | `?` | Show all shortcuts |
 
+## Supported Agents
+
+- **Claude Code** - syncs from `~/.claude/projects/`
+- **Codex** - syncs from `~/.codex/sessions/`
+
 ## How It Works
 
-The viewer syncs sessions from Claude Code's local storage (`~/.claude/projects/`) into its own database with full-text search indexing. When you're viewing an active session, it watches the source file and updates the UI within seconds of new messages.
+The viewer syncs sessions from each agent's local storage into its own database with full-text search indexing. When you're viewing an active session, it watches the source file and updates the UI within seconds of new messages.
 
 ## License
 

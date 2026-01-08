@@ -68,6 +68,7 @@ def init_db():
                 message_count INTEGER DEFAULT 0,
                 file_size INTEGER,
                 file_hash TEXT,
+                agent TEXT DEFAULT 'claude',
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP
             );
 
@@ -144,12 +145,13 @@ def upsert_session(
     message_count: int = 0,
     file_size: Optional[int] = None,
     file_hash: Optional[str] = None,
+    agent: str = "claude",
 ):
     """Insert or update a session."""
     with get_db() as conn:
         conn.execute("""
-            INSERT INTO sessions (id, project, machine, first_message, started_at, ended_at, message_count, file_size, file_hash)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO sessions (id, project, machine, first_message, started_at, ended_at, message_count, file_size, file_hash, agent)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 project = excluded.project,
                 machine = excluded.machine,
@@ -158,8 +160,9 @@ def upsert_session(
                 ended_at = excluded.ended_at,
                 message_count = excluded.message_count,
                 file_size = excluded.file_size,
-                file_hash = excluded.file_hash
-        """, (session_id, project, machine, first_message, started_at, ended_at, message_count, file_size, file_hash))
+                file_hash = excluded.file_hash,
+                agent = excluded.agent
+        """, (session_id, project, machine, first_message, started_at, ended_at, message_count, file_size, file_hash, agent))
 
 
 def delete_session_messages(session_id: str):

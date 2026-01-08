@@ -205,7 +205,11 @@
         }
 
         .session-meta .agent-name {
-            color: #d4a574;
+            color: #d4a574;  /* Default/Claude color */
+        }
+
+        .session-meta .agent-name.codex {
+            color: #7dd3fc;  /* Codex - light blue */
         }
 
         .badge {
@@ -743,7 +747,7 @@
                     <div class="session-project">${escapeHtml(s.project || '')}</div>
                     <div class="session-title">${escapeHtml(s.first_message || 'No message')}</div>
                     <div class="session-meta">
-                        <span class="agent-name">Claude</span>
+                        <span class="agent-name ${s.agent || 'claude'}">${formatAgentName(s.agent)}</span>
                         <span class="meta-sep">·</span>
                         <span>${s.message_count} msgs</span>
                         <span class="meta-sep">·</span>
@@ -973,6 +977,14 @@
             if (!ts) return '';
             const date = new Date(ts);
             return date.toLocaleTimeString();
+        }
+
+        function formatAgentName(agent) {
+            const names = {
+                'claude': 'Claude',
+                'codex': 'Codex',
+            };
+            return names[agent] || agent || 'Claude';
         }
 
         // Modal functions
