@@ -282,17 +282,29 @@ async def event_stream(session_id: Optional[str] = None):
             await asyncio.sleep(1.5)
             heartbeat_counter += 1
 
+            # Helper to sync based on session type
+            is_codex = session_id and session_id.startswith("codex:")
+
+            async def do_sync():
+                if is_codex:
+                    return await asyncio.to_thread(
+                        sync_module.sync_codex_session,
+                        source_path, machine="local", force=True
+                    )
+                else:
+                    project_name = sync_module.get_project_name(source_path.parent)
+                    return await asyncio.to_thread(
+                        sync_module.sync_session_file,
+                        source_path, project_name, machine="local", force=True
+                    )
+
             if source_path:
                 try:
                     current_mtime = source_path.stat().st_mtime
                     if last_mtime and current_mtime > last_mtime:
                         # File changed - sync and notify (run in thread to avoid blocking)
                         last_mtime = current_mtime
-                        project_name = sync_module.get_project_name(source_path.parent)
-                        result = await asyncio.to_thread(
-                            sync_module.sync_session_file,
-                            source_path, project_name, machine="local", force=True
-                        )
+                        result = await do_sync()
                         if result and not result.get("skipped"):
                             yield f"event: session_updated\ndata: {session_id}\n\n"
                     elif last_mtime is None:
@@ -308,11 +320,7 @@ async def event_stream(session_id: Optional[str] = None):
                     try:
                         last_mtime = source_path.stat().st_mtime
                         # Sync on re-resolve since file may have changed while missing
-                        project_name = sync_module.get_project_name(source_path.parent)
-                        result = await asyncio.to_thread(
-                            sync_module.sync_session_file,
-                            source_path, project_name, machine="local", force=True
-                        )
+                        result = await do_sync()
                         if result and not result.get("skipped"):
                             yield f"event: session_updated\ndata: {session_id}\n\n"
                     except (FileNotFoundError, PermissionError):

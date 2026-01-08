@@ -74,15 +74,28 @@ def find_matching_projects() -> list[Path]:
 
 
 def find_source_file(session_id: str) -> Optional[Path]:
-    """Find the source .jsonl file for a session ID in Claude projects.
+    """Find the source .jsonl file for a session ID.
 
+    Handles both Claude (plain ID) and Codex (codex: prefixed) sessions.
     Validates session_id to prevent path traversal attacks.
     """
+    if not session_id:
+        return None
+
+    # Handle Codex sessions (prefixed with "codex:")
+    if session_id.startswith("codex:"):
+        return _find_codex_source_file(session_id[6:])  # Strip "codex:" prefix
+
+    # Claude sessions
+    return _find_claude_source_file(session_id)
+
+
+def _find_claude_source_file(session_id: str) -> Optional[Path]:
+    """Find a Claude session source file."""
     if not CLAUDE_PROJECTS_DIR.exists():
         return None
 
     # Validate session_id: only allow alphanumeric, hyphens, underscores
-    # This prevents path traversal via ../ or absolute paths
     if not session_id or not all(c.isalnum() or c in '-_' for c in session_id):
         return None
 
@@ -90,13 +103,40 @@ def find_source_file(session_id: str) -> Optional[Path]:
         if not project_dir.is_dir():
             continue
         candidate = project_dir / f"{session_id}.jsonl"
-        # Extra safety: ensure candidate is actually under project_dir
         try:
             candidate.resolve().relative_to(project_dir.resolve())
         except ValueError:
             continue
         if candidate.exists():
             return candidate
+    return None
+
+
+def _find_codex_source_file(session_id: str) -> Optional[Path]:
+    """Find a Codex session source file by searching year/month/day directories."""
+    if not CODEX_SESSIONS_DIR.exists():
+        return None
+
+    # Validate session_id: only allow alphanumeric, hyphens, underscores
+    if not session_id or not all(c.isalnum() or c in '-_' for c in session_id):
+        return None
+
+    # Search through year/month/day structure
+    for year_dir in CODEX_SESSIONS_DIR.iterdir():
+        if not year_dir.is_dir() or not year_dir.name.isdigit():
+            continue
+        for month_dir in year_dir.iterdir():
+            if not month_dir.is_dir() or not month_dir.name.isdigit():
+                continue
+            for day_dir in month_dir.iterdir():
+                if not day_dir.is_dir() or not day_dir.name.isdigit():
+                    continue
+                # Codex files are named rollout-{timestamp}-{uuid}.jsonl
+                # The session_id is the UUID part
+                for session_file in day_dir.glob("*.jsonl"):
+                    # Check if the session_id is in the filename
+                    if session_id in session_file.stem:
+                        return session_file
     return None
 
 

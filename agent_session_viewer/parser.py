@@ -255,8 +255,10 @@ def parse_codex_session(
     Parse a Codex JSONL session file and extract metadata + messages.
 
     Codex format:
-    - session_meta: {payload: {id, cwd, timestamp}}
-    - response_item: {payload: {role: "user"|"assistant", content: [{type, text}]}}
+    - session_meta: {timestamp, payload: {id, cwd}}
+    - response_item: {timestamp, payload: {role: "user"|"assistant", content: [{type, text}]}}
+
+    Note: Session IDs are prefixed with "codex:" to avoid collisions with Claude session IDs.
 
     Returns:
         Tuple of (SessionMetadata, list of ParsedMessages)
@@ -342,6 +344,9 @@ def parse_codex_session(
     # Fallback session_id from filename if not in metadata
     if not session_id:
         session_id = jsonl_path.stem
+
+    # Prefix with "codex:" to avoid collision with Claude session IDs
+    session_id = f"codex:{session_id}"
 
     metadata = SessionMetadata(
         session_id=session_id,
