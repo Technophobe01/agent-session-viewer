@@ -132,17 +132,16 @@ def _find_codex_source_file(session_id: str) -> Optional[Path]:
                 if not day_dir.is_dir() or not day_dir.name.isdigit():
                     continue
                 # Codex files are named rollout-{timestamp}-{uuid}.jsonl
-                # The session_id is the UUID part
+                # UUID format: 8-4-4-4-12 hex chars (e.g., 019b9da7-1f41-7af2-80d9-6e293902fea8)
                 for session_file in day_dir.glob("*.jsonl"):
-                    # Extract UUID from filename: rollout-YYYY-MM-DDTHH-MM-SS-{uuid}
-                    # Format: rollout-2026-01-08T06-48-54-019b9da7-1f41-7af2-80d9-6e293902fea8
-                    # Split: [rollout, 2026, 01, 08T06, 48, 54, uuid-parts...]
                     stem = session_file.stem
                     if stem.startswith("rollout-"):
-                        parts = stem.split("-")
-                        # UUID starts at index 6 (after rollout-YYYY-MM-DDTHH-MM-SS-)
-                        if len(parts) >= 7:
-                            file_uuid = "-".join(parts[6:])
+                        # UUID is last 5 dash-separated segments (8-4-4-4-12 format)
+                        # Use rsplit to extract from end, robust to timestamp format changes
+                        parts = stem.rsplit("-", 5)
+                        if len(parts) == 6:
+                            # parts[0] = "rollout-{timestamp}", parts[1:] = UUID segments
+                            file_uuid = "-".join(parts[1:])
                             if file_uuid == session_id:
                                 return session_file
     return None
