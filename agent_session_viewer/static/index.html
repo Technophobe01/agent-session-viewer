@@ -240,24 +240,6 @@
             color: var(--text);
         }
 
-        .scroll-to-top {
-            display: inline-block;
-            margin-bottom: 12px;
-            padding: 6px 12px;
-            background: var(--bg-secondary);
-            border: 1px solid var(--border);
-            border-radius: 4px;
-            color: var(--text-muted);
-            font-size: 0.85rem;
-            cursor: pointer;
-            transition: background 0.15s, color 0.15s;
-        }
-
-        .scroll-to-top:hover {
-            background: var(--border);
-            color: var(--text);
-        }
-
         .messages {
             display: flex;
             flex-direction: column;
@@ -530,6 +512,7 @@
                 <input type="text" id="search-input" placeholder="Search messages...">
             </div>
             <div class="header-actions">
+                <button class="btn" id="scroll-top-btn" title="Scroll to top">↑ Top</button>
                 <button class="btn" id="sort-btn" title="Toggle message order">↓ Newest first</button>
                 <button class="btn" id="sync-btn" title="Sync now">↻ Sync</button>
                 <button class="btn" id="shortcuts-btn" title="Keyboard shortcuts">⌨ ?</button>
@@ -626,6 +609,7 @@
         const searchInput = document.getElementById('search-input');
         const syncBtn = document.getElementById('sync-btn');
         const sortBtn = document.getElementById('sort-btn');
+        const scrollTopBtn = document.getElementById('scroll-top-btn');
         const shortcutsBtn = document.getElementById('shortcuts-btn');
         const shortcutsModal = document.getElementById('shortcuts-modal');
         const modalClose = document.getElementById('modal-close');
@@ -784,7 +768,6 @@
 
             content.innerHTML = `
                 <div class="session-detail">
-                    <button class="scroll-to-top">Scroll to top</button>
                     <div class="messages">
                         ${sortedMessages.map((m, i) => `
                             <div class="message ${m.role}" id="${m.msg_id}" data-index="${i}">
@@ -798,11 +781,6 @@
                     </div>
                 </div>
             `;
-
-            // Add click handler for scroll to top
-            content.querySelector('.scroll-to-top').addEventListener('click', () => {
-                content.scrollTo({ top: 0, behavior: 'smooth' });
-            });
 
             // Add click handlers to messages
             content.querySelectorAll('.message').forEach(msg => {
@@ -1019,6 +997,9 @@
 
         syncBtn.addEventListener('click', triggerSync);
         sortBtn.addEventListener('click', toggleSort);
+        scrollTopBtn.addEventListener('click', () => {
+            content.scrollTo({ top: 0, behavior: 'smooth' });
+        });
         shortcutsBtn.addEventListener('click', openShortcutsModal);
         modalClose.addEventListener('click', closeShortcutsModal);
 
