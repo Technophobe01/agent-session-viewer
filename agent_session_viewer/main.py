@@ -307,6 +307,14 @@ async def event_stream(session_id: Optional[str] = None):
                 if source_path:
                     try:
                         last_mtime = source_path.stat().st_mtime
+                        # Sync on re-resolve since file may have changed while missing
+                        project_name = sync_module.get_project_name(source_path.parent)
+                        result = await asyncio.to_thread(
+                            sync_module.sync_session_file,
+                            source_path, project_name, machine="local", force=True
+                        )
+                        if result and not result.get("skipped"):
+                            yield f"event: session_updated\ndata: {session_id}\n\n"
                     except (FileNotFoundError, PermissionError):
                         source_path = None
 
