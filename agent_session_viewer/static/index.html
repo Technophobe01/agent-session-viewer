@@ -240,14 +240,6 @@
             color: var(--text);
         }
 
-        /* Session detail */
-        .session-detail h2 {
-            font-size: 1.1rem;
-            margin-bottom: 16px;
-            padding-bottom: 12px;
-            border-bottom: 1px solid var(--border);
-        }
-
         .messages {
             display: flex;
             flex-direction: column;
@@ -774,7 +766,6 @@
 
             content.innerHTML = `
                 <div class="session-detail">
-                    <h2>${escapeHtml(session.first_message || session.id)}</h2>
                     <div class="messages">
                         ${sortedMessages.map((m, i) => `
                             <div class="message ${m.role}" id="${m.msg_id}" data-index="${i}">
