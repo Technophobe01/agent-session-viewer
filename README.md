@@ -2,6 +2,8 @@
 
 Browse, search, and revisit your AI coding sessions. Never lose track of that clever solution your AI pair programmer came up with three weeks ago.
 
+![Session Viewer](docs/screenshots/session-viewer.png)
+
 ## Why?
 
 AI coding sessions pile up fast. Finding that one conversation where you solved a tricky bug or implemented a specific pattern means digging through session files by hand. This tool gives you instant full-text search across every session from Claude Code and Codex, organized by project.
