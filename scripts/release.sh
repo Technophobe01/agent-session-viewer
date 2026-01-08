@@ -54,8 +54,12 @@ content = re.sub(r'^version = \".*\"', f'version = \"$VERSION\"', content, flags
 p.write_text(content)
 "
 
+# Update uv.lock to reflect version change
+echo "Updating uv.lock..."
+uv lock
+
 # Commit version bump (only if changed)
-git add pyproject.toml
+git add pyproject.toml uv.lock
 if ! git diff --cached --quiet; then
     git commit -m "Bump version to $VERSION"
 else
